@@ -196,14 +196,7 @@ axios
     })
     .catch((e) => console.error);
 
-function exitHandler(options: any, code: number) {
-    rest.delete(
-        Routes.applicationCommands(process.env.DISCORD_OAUTH_CLIENT_ID),
-        {
-            body: commands,
-        }
-    );
-}
+function exitHandler(options: any, code: number) {}
 
 setInterval(async () => {
     //fetch latest comic https://xkcd.com/info.0.json
