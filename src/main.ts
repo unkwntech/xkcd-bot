@@ -15,6 +15,13 @@ const client = new Client({
     intents: [],
 });
 
+const stats = {
+    randomRequests: 0,
+    idRequests: 0,
+    keywordRequests: 0,
+    startupTime: new Date(),
+};
+
 //Log to console when bot is ready to recieve commands.
 client.once("ready", () => {
     console.log("Ready");
@@ -29,6 +36,7 @@ client.on("interactionCreate", async (interaction) => {
 
     if (commandName === "xkcd") {
         //no options provded, output random comic
+        stats.randomRequests++;
         if (interaction.options.data.length === 0) {
             let request = Math.floor(Math.random() * Comics.length);
             //if the comic is not loaded, load it
@@ -47,6 +55,7 @@ client.on("interactionCreate", async (interaction) => {
             interaction.options.data[0].type ===
             ApplicationCommandOptionType.Integer
         ) {
+            stats.idRequests++;
             const request: number = +(interaction.options.data[0].value || 0);
             //check if comic exists
             if (Comics[request]) {
@@ -68,6 +77,7 @@ client.on("interactionCreate", async (interaction) => {
             interaction.options.data[0].type ===
             ApplicationCommandOptionType.String
         ) {
+            stats.keywordRequests++;
             const searchTerms = interaction.options.data[0].value as string;
             let matches = [];
 
@@ -85,8 +95,51 @@ client.on("interactionCreate", async (interaction) => {
 
             interaction.reply({ embeds: matches.map((o) => o.toEmbed()) });
         }
+    } else if (commandName === "stats") {
+        const uptime = formatDuration(
+            new Date().getTime() - stats.startupTime.getTime()
+        );
+        let output = `Known Comics: ${Comics.length}\n`;
+        output += `Comics stored in RAM: ${
+            Comics.filter((c) => c.img !== null).length
+        }\n`;
+        output += `Requests for comics (since last startup): ${
+            stats.idRequests + stats.keywordRequests + stats.randomRequests
+        }`;
+        output += `Requests for random comics (since last startup): ${stats.randomRequests}\n`;
+        output += `Requests for specific comics (since last startup): ${stats.idRequests}\n`;
+        output += `Keyword searches for comics (since last startup): ${stats.keywordRequests}\n`;
+        output += `Uptime: ${uptime}\n`;
+
+        interaction.reply(output);
     }
 });
+
+function formatDuration(duration: number): string {
+    let output = "";
+    if (duration >= 2592000) {
+        //month
+        output += Math.floor(duration / 2592000).toString() + " Months ";
+        duration = duration % 2592000;
+    }
+    if (duration >= 86400) {
+        //day
+        output += Math.floor(duration / 86400).toString() + " Days ";
+        duration = duration % 86400;
+    }
+    if (duration >= 3600) {
+        //hour
+        output += Math.floor(duration / 3600).toString() + " Hours ";
+        duration = duration % 3600;
+    }
+    if (duration >= 60) {
+        //minute
+        output += Math.floor(duration / 60).toString() + " Minutes ";
+        duration = duration % 60;
+    }
+    output += duration + " Seconds";
+    return output;
+}
 
 const commands = [
     new SlashCommandBuilder()
@@ -104,6 +157,9 @@ const commands = [
                 .setDescription("The term you want to search with")
                 .setRequired(false)
         ),
+    new SlashCommandBuilder()
+        .setName("stats")
+        .setDescription("Show some stats about the bot."),
 ].map((command) => command.toJSON());
 
 //Setup the REST API to push our commands list to it
