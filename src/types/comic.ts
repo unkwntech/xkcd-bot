@@ -12,35 +12,31 @@ export default class Comic {
     public title: string;
 
     public constructor(json: any) {
-        this.day = json.data;
-        this.month = json.month;
-        this.year = json.year;
+        this.day = json.data || null;
+        this.month = json.month || null;
+        this.year = json.year || null;
         this.num = json.num;
-        this.link = json.link;
-        this.news = json.news;
-        this.safe_title = json.safe_title;
-        this.transcript = json.transcript;
-        this.alt = json.alt;
-        this.img = json.img;
+        this.link = json.link || null;
+        this.news = json.news || null;
+        this.safe_title = json.safe_title || null;
+        this.transcript = json.transcript || null;
+        this.alt = json.alt || null;
+        this.img = json.img || null;
         this.title = json.title;
     }
 
     public toEmbed(): object {
         return {
-            embeds: [
-                {
-                    title: this.title,
-                    description: this.alt,
-                    image: {
-                        url: this.img,
-                    },
-                    footer: {
-                        icon_url: "http://xkcd.com/favicon.ico",
-                        text: "Licensed CC-BY-NC 2.5 by Randall Munroe",
-                    },
-                    url: this.link,
-                },
-            ],
+            title: this.title,
+            description: this.alt,
+            image: {
+                url: this.img,
+            },
+            footer: {
+                icon_url: "http://xkcd.com/favicon.ico",
+                text: "Licensed CC-BY-NC 2.5 by Randall Munroe",
+            },
+            url: this.link,
         };
     }
 }

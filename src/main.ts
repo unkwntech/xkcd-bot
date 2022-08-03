@@ -1,5 +1,12 @@
-import axios, { AxiosError } from "axios";
-import { Client, REST, Routes, SlashCommandBuilder } from "discord.js";
+import axios from "axios";
+import {
+    ApplicationCommandOptionType,
+    Client,
+    REST,
+    Routes,
+    SlashCommandBuilder,
+} from "discord.js";
+import { parse } from "node-html-parser";
 import Comic from "./types/comic";
 //load variables from .env
 require("dotenv").config();
@@ -12,6 +19,7 @@ const client = new Client({
 client.once("ready", () => {
     console.log("Ready");
 });
+const Comics: Comic[] = [];
 
 //Setup even handler for the slash commands being used
 client.on("interactionCreate", async (interaction) => {
@@ -20,51 +28,62 @@ client.on("interactionCreate", async (interaction) => {
     const { commandName } = interaction;
 
     if (commandName === "xkcd") {
-        if (interaction.options.data.length > 0) {
-            //Load data from the JSON API build an embed for it
-            axios
-                .get<Comic>(
-                    `https://xkcd.com/${interaction.options.data[0].value}/info.0.json`
-                )
-                .then((res) => {
-                    interaction.reply(new Comic(res.data).toEmbed());
-                })
-                .catch((e: AxiosError) => {
-                    console.error(e);
-                    if (e.message.includes("404"))
-                        interaction.reply(
-                            "I can't find that comic, did you use a valid comic ID?"
+        //no options provded, output random comic
+        if (interaction.options.data.length === 0) {
+            let request = Math.floor(Math.random() * Comics.length);
+            //if the comic is not loaded, load it
+            if (Comics[request].img === null) {
+                let result = await axios.get<Comic>(
+                    `https://xkcd.com/${request}/info.0.json`
+                );
+                Comics[request] = new Comic(result.data);
+            }
+            //send comic
+            interaction.reply({ embeds: [Comics[request].toEmbed()] });
+            return;
+        }
+        //integer option was provdided, attempt to display the comic with that id
+        if (
+            interaction.options.data[0].type ===
+            ApplicationCommandOptionType.Integer
+        ) {
+            const request: number = +(interaction.options.data[0].value || 0);
+            //check if comic exists
+            if (Comics[request]) {
+                //if the comic is not loaded, load it
+                if (Comics[request].img === null) {
+                    let result = await axios.get<Comic>(
+                        `https://xkcd.com/${request}/info.0.json`
+                    );
+                    Comics[request] = new Comic(result.data);
+                }
+                //send comic
+                interaction.reply({ embeds: [Comics[request].toEmbed()] });
+            } else {
+                interaction.reply(
+                    "I couldn't find that comic are you sure it's a valid id?"
+                );
+            }
+        } else if (
+            interaction.options.data[0].type ===
+            ApplicationCommandOptionType.String
+        ) {
+            const searchTerms = interaction.options.data[0].value as string;
+            let matches = [];
+
+            for (let i = 0; matches.length < 3 && i < Comics.length; i++) {
+                if (Comics[i].title.match(new RegExp(searchTerms, "i"))) {
+                    if (Comics[i].img === null) {
+                        let result = await axios.get<Comic>(
+                            `https://xkcd.com/${Comics[i].num}/info.0.json`
                         );
-                    else
-                        interaction.reply(
-                            "There was an error loading that comic, it has been logged for further investigation."
-                        );
-                    //console.error(e.response.status);
-                });
-        } else {
-            //Request the random page and read back the URL after the redirect to the comic.
-            axios.get("https://c.xkcd.com/random/comic/").then((res) => {
-                //The path shuold look like `/208/` so grab only the number portion
-                let id: string = res.request.path.replace(/[^\d]/gi, "");
-                //Get the comic data from the API, same as above.
-                axios
-                    .get<Comic>(`https://xkcd.com/${id}/info.0.json`)
-                    .then((res) => {
-                        interaction.reply(new Comic(res.data).toEmbed());
-                    })
-                    .catch((e: AxiosError) => {
-                        console.error(e);
-                        if (e.message.includes("404"))
-                            interaction.reply(
-                                "I can't find that comic, did you use a valid comic ID?"
-                            );
-                        else
-                            interaction.reply(
-                                "There was an error loading that comic, it has been logged for further investigation."
-                            );
-                        //console.error(e.response.status);
-                    });
-            });
+                        Comics[i] = new Comic(result.data);
+                    }
+                    matches.push(Comics[i]);
+                }
+            }
+
+            interaction.reply({ embeds: matches.map((o) => o.toEmbed()) });
         }
     }
 });
@@ -72,11 +91,17 @@ client.on("interactionCreate", async (interaction) => {
 const commands = [
     new SlashCommandBuilder()
         .setName("xkcd")
-        .setDescription("Replies with a random XKCD comic.")
+        .setDescription("Replies with an xkcd comic.")
         .addIntegerOption((option) =>
             option
                 .setName("id")
                 .setDescription("The ID of the comic you want.")
+                .setRequired(false)
+        )
+        .addStringOption((option) =>
+            option
+                .setName("term")
+                .setDescription("The term you want to search with")
                 .setRequired(false)
         ),
 ].map((command) => command.toJSON());
@@ -95,3 +120,50 @@ rest.put(Routes.applicationCommands(process.env.DISCORD_OAUTH_CLIENT_ID), {
 
 //Connect the bot
 client.login(process.env.DISCORD_BOT_TOKEN);
+
+//Load titles for keyword search
+
+axios
+    .get("https://xkcd.com/archive/")
+    .then((result) => {
+        let id, name;
+        const doc = parse(result.data);
+        doc.querySelector("#middleContainer")
+            ?.querySelectorAll("a")
+            .forEach((ele, i) => {
+                let name: string = ele.innerText.trim();
+                let id: number = parseInt(
+                    ele.attributes["href"].replace(/\//gi, "")
+                );
+                Comics.push(new Comic({ num: id, title: name }));
+            });
+    })
+    .catch((e) => console.error);
+
+function exitHandler(options: any, code: number) {
+    rest.delete(
+        Routes.applicationCommands(process.env.DISCORD_OAUTH_CLIENT_ID),
+        {
+            body: commands,
+        }
+    );
+}
+
+setInterval(async () => {
+    //fetch latest comic https://xkcd.com/info.0.json
+    let result = await axios.get<Comic>(`https://xkcd.com/info.0.json`);
+    Comics.push(new Comic(result.data));
+}, 24 * 60 * 60 * 1000); //Run daily
+
+//do something when app is closing
+process.on("exit", exitHandler.bind(null, { cleanup: true }));
+
+//catches ctrl+c event
+process.on("SIGINT", exitHandler.bind(null, { exit: true }));
+
+// catches "kill pid" (for example: nodemon restart)
+process.on("SIGUSR1", exitHandler.bind(null, { exit: true }));
+process.on("SIGUSR2", exitHandler.bind(null, { exit: true }));
+
+//catches uncaught exceptions
+process.on("uncaughtException", exitHandler.bind(null, { exit: true }));
