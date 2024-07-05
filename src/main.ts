@@ -105,7 +105,7 @@ client.on("interactionCreate", async (interaction) => {
         }\n`;
         output += `Requests for comics (since last startup): ${
             stats.idRequests + stats.keywordRequests + stats.randomRequests
-        }\n`;
+        }`;
         output += `Requests for random comics (since last startup): ${stats.randomRequests}\n`;
         output += `Requests for specific comics (since last startup): ${stats.idRequests}\n`;
         output += `Keyword searches for comics (since last startup): ${stats.keywordRequests}\n`;

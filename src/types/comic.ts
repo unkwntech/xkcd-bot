@@ -33,8 +33,7 @@ export default class Comic {
                 url: this.img,
             },
             footer: {
-                icon_url:
-                    "https://github.com/unkwntech/xkcd-bot/raw/main/content/favicon-2.png",
+                icon_url: "http://xkcd.com/favicon.ico",
                 text: "Licensed CC-BY-NC 2.5 by Randall Munroe",
             },
             url: this.link,
